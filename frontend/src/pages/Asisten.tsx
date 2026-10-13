@@ -126,8 +126,8 @@ export default function Asisten() {
   return (
     <div data-testid="assistant-page" className="flex h-[calc(100vh-7rem)] flex-col lg:h-[calc(100vh-9rem)]">
       <PageHeader
-        eyebrow="Asisten AI"
-        title="Tanya Jawab Data Gudang"
+        eyebrow="Tanya Dave"
+        title="Tanya Jawab dengan Dave"
         actions={
           messages.length > 0 ? (
             <Button variant="outline" onClick={() => void clearHistory()} disabled={busy} data-testid="assistant-clear-button">
@@ -144,9 +144,9 @@ export default function Asisten() {
               <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-amber-800/10">
                 <Sparkles className="size-7 text-amber-800" />
               </div>
-              <h2 className="mt-4 font-heading text-xl font-semibold text-amber-950">Halo{me.data ? `, ${me.data.name}` : ""}!</h2>
+              <h2 className="mt-4 font-heading text-xl font-semibold text-amber-950">Halo{me.data ? `, ${me.data.name}` : ""}! Saya Dave 👋</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Tanyakan apa saja tentang stok, transaksi, supplier, pembelian, dan penjualan. Jawaban diambil dari data terkini aplikasi Anda.
+                Tanyakan apa saja tentang stok, transaksi, supplier, pembelian, dan penjualan. Saya jawab dari data terkini aplikasi Anda.
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (

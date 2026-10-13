@@ -954,6 +954,23 @@ async def delete_penjualan(sid: str, wh: str = Depends(active_wh)):
     return {"ok": True}
 
 
+@router.get("/penjualan/jadi-check", dependencies=[Depends(require_any("penjualan"))])
+async def penjualan_jadi_check(jadi: str, exclude_id: Optional[str] = None, wh: str = Depends(active_wh)):
+    """Cek apakah nomor jadi sudah pernah dijual / di-OUT di gudang ini."""
+    j = (jadi or "").strip().upper()
+    if not j:
+        return {"exists": False}
+    jq: dict = {"warehouse_id": wh, "items.nomor_jadi": j}
+    if exclude_id:
+        jq["id"] = {"$ne": exclude_id}
+    if await db.penjualan.find_one(jq, {"_id": 0, "id": 1}):
+        return {"exists": True}
+    if await db.out_records.find_one({"warehouse_id": wh, "nomor_jadi": j}, {"_id": 0, "id": 1}):
+        return {"exists": True}
+    return {"exists": False}
+
+
+
 @router.get("/penjualan/lookup", dependencies=[Depends(require_any("penjualan"))])
 async def penjualan_lookup(seri: str, wh: str = Depends(active_wh)):
     s = seri.strip().upper()

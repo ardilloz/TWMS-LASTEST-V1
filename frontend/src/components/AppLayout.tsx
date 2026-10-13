@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import {
   ArrowDownToLine,
@@ -13,6 +14,7 @@ import {
   Database,
   FileSpreadsheet,
   Gauge,
+  GripVertical,
   History,
   Layers,
   LayoutDashboard,
@@ -24,6 +26,7 @@ import {
   Pencil,
   Receipt,
   Scale,
+  Settings2,
   ShoppingCart,
   Sparkles,
   Tag,
@@ -31,15 +34,18 @@ import {
   Users,
   UserSquare,
   Warehouse,
+  X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
-import { ApiError } from "@/lib/api";
+import { ThemeSettings } from "@/components/ThemeSettings";
+import { apiGet, apiPut, ApiError } from "@/lib/api";
 import { useMe, useWarehouses } from "@/lib/queries";
 import { warehouseOptions } from "@/lib/warehouses";
 import { setActiveWh, useActiveWh } from "@/lib/activeWh";
 import { endSession } from "@/lib/session";
 import { canAny, isAdmin } from "@/lib/perms";
+import { applyOrder, moveKey, type NavOrder } from "@/lib/navOrder";
 import type { Permission, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -89,12 +95,20 @@ const GROUPS: { id: string; label: string; icon: typeof Users; items: NavItem[] 
 ];
 
 const SINGLES: NavItem[] = [
-  { to: "/asisten", label: "Asisten AI", icon: Sparkles, testId: "nav-asisten", perms: ["asisten"] },
+  { to: "/asisten", label: "Tanya Dave", icon: Sparkles, testId: "nav-asisten", perms: ["asisten"] },
   { to: "/master-data", label: "Master Data", icon: Database, testId: "nav-master-data", perms: "admin" },
   { to: "/pengguna", label: "Kelola Pengguna", icon: Users, testId: "nav-pengguna", perms: "admin" },
 ];
 
 const visible = (user: User | undefined, n: NavItem) => (n.perms === "admin" ? isAdmin(user) : canAny(user, n.perms));
+
+const DEFAULT_ORDER: NavOrder = {
+  groups: GROUPS.map((g) => g.id),
+  items: Object.fromEntries(GROUPS.map((g) => [g.id, g.items.map((n) => n.testId)])),
+  singles: SINGLES.map((n) => n.testId),
+};
+
+type DragState = { list: string; key: string } | null;
 
 function NavItemLink({ n, tp, onNavigate, nested }: { n: NavItem; tp: string; onNavigate?: () => void; nested?: boolean }) {
   return (
@@ -117,14 +131,78 @@ function NavItemLink({ n, tp, onNavigate, nested }: { n: NavItem; tp: string; on
   );
 }
 
+function DraggableRow({ n, tp, list, drag, setDrag, onReorder, nested }: { n: NavItem; tp: string; list: string; drag: DragState; setDrag: (d: DragState) => void; onReorder: (list: string, targetKey: string) => void; nested?: boolean }) {
+  const isDragging = drag?.list === list && drag?.key === n.testId;
+  return (
+    <div
+      draggable
+      onDragStart={() => setDrag({ list, key: n.testId })}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); onReorder(list, n.testId); }}
+      data-testid={`${tp}reorder-${n.testId}`}
+      className={cn(
+        "flex cursor-grab items-center gap-2 rounded-lg border border-dashed border-sidebar-border/70 px-3 py-2 text-sm font-medium text-[#D6C7B2] active:cursor-grabbing",
+        nested && "ml-3",
+        isDragging && "opacity-40",
+      )}
+    >
+      <GripVertical className="size-4 shrink-0 opacity-60" />
+      <n.icon className="size-4 shrink-0" />
+      <span className="flex-1 truncate">{n.label}</span>
+    </div>
+  );
+}
+
 function SidebarContent({ user, onNavigate, tp = "" }: { user?: User; onNavigate?: () => void; tp?: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const whs = useWarehouses();
   const whOpts = warehouseOptions(whs.data);
   const active = useActiveWh();
+  const admin = isAdmin(user);
+  const qc = useQueryClient();
+  const navOrderQ = useQuery({ queryKey: ["nav-order"], queryFn: () => apiGet<NavOrder | null>("/meta/nav-order"), staleTime: 60_000 });
+  const [editMode, setEditMode] = useState(false);
+  const [order, setOrder] = useState<NavOrder | null>(null);
+  const [drag, setDrag] = useState<DragState>(null);
+
   useEffect(() => {
     if (whOpts.length > 0 && !whOpts.some((o) => o.value === active)) setActiveWh(whOpts[0].value);
   }, [whOpts, active]);
+
+  useEffect(() => {
+    if (!editMode) setOrder(navOrderQ.data ?? null);
+  }, [navOrderQ.data, editMode]);
+
+  const saveOrder = useMutation({
+    mutationFn: (o: NavOrder) => apiPut("/meta/nav-order", o),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["nav-order"] }),
+  });
+
+  const ord = order ?? navOrderQ.data ?? null;
+  const groupsOrdered = applyOrder(GROUPS, (g) => g.id, ord?.groups);
+  const singlesVisible = SINGLES.filter((n) => visible(user, n));
+  const singlesOrdered = applyOrder(singlesVisible, (n) => n.testId, ord?.singles);
+
+  const effOrder = (): NavOrder => ({
+    groups: groupsOrdered.map((g) => g.id),
+    items: Object.fromEntries(GROUPS.map((g) => [g.id, applyOrder(g.items, (n) => n.testId, ord?.items?.[g.id]).map((n) => n.testId)])),
+    singles: applyOrder(SINGLES, (n) => n.testId, ord?.singles).map((n) => n.testId),
+  });
+
+  const onReorder = (list: string, targetKey: string) => {
+    if (!drag || drag.list !== list || drag.key === targetKey) { setDrag(null); return; }
+    const base = effOrder();
+    let next: NavOrder;
+    if (list === "groups") next = { ...base, groups: moveKey(base.groups, drag.key, targetKey) };
+    else if (list === "singles") next = { ...base, singles: moveKey(base.singles, drag.key, targetKey) };
+    else next = { ...base, items: { ...base.items, [list]: moveKey(base.items[list] ?? [], drag.key, targetKey) } };
+    setOrder(next);
+    saveOrder.mutate(next);
+    setDrag(null);
+  };
+
+  const resetOrder = () => { const d = DEFAULT_ORDER; setOrder(d); saveOrder.mutate(d); };
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border px-6 py-6">
@@ -132,7 +210,7 @@ function SidebarContent({ user, onNavigate, tp = "" }: { user?: User; onNavigate
           <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-sidebar-primary font-heading text-lg font-bold uppercase text-sidebar-primary-foreground">
             {user?.name?.charAt(0) ?? "•"}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-heading text-lg font-bold leading-tight" data-testid={tp + "sidebar-user-name"}>
               {user?.name ?? "—"}
             </p>
@@ -140,29 +218,41 @@ function SidebarContent({ user, onNavigate, tp = "" }: { user?: User; onNavigate
               {user?.role === "admin" ? "Admin Utama" : user ? "Staff" : ""}
             </p>
           </div>
+          <ThemeSettings userId={user?.id} />
         </div>
       </div>
       <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-5">
-        {GROUPS.map((g) => {
-          const items = g.items.filter((n) => visible(user, n));
-          if (items.length === 0) return null;
-          const isOpen = open[g.id] ?? true;
+        {groupsOrdered.map((g) => {
+          const items = applyOrder(g.items.filter((n) => visible(user, n)), (n) => n.testId, ord?.items?.[g.id]);
+          if (items.length === 0 && !(editMode && admin)) return null;
+          const allItems = applyOrder(g.items, (n) => n.testId, ord?.items?.[g.id]);
+          const isOpen = editMode || (open[g.id] ?? true);
           return (
-            <div key={g.id}>
+            <div
+              key={g.id}
+              onDragOver={editMode && admin ? (e) => e.preventDefault() : undefined}
+              onDrop={editMode && admin ? (e) => { e.preventDefault(); onReorder("groups", g.id); } : undefined}
+            >
               <button
                 type="button"
-                onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
+                draggable={editMode && admin}
+                onDragStart={editMode && admin ? () => setDrag({ list: "groups", key: g.id }) : undefined}
+                onClick={() => !editMode && setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
                 data-testid={`${tp}nav-group-${g.id}`}
                 aria-expanded={isOpen}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent/60"
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent/60",
+                  editMode && admin && "cursor-grab border border-dashed border-sidebar-border/70 active:cursor-grabbing",
+                )}
               >
+                {editMode && admin && <GripVertical className="size-4 shrink-0 opacity-60" />}
                 <g.icon className="size-4 shrink-0 text-sidebar-primary" />
                 <span className="flex-1">{g.label}</span>
-                <ChevronDown className={cn("size-4 transition-transform duration-200", isOpen && "rotate-180")} />
+                {!editMode && <ChevronDown className={cn("size-4 transition-transform duration-200", isOpen && "rotate-180")} />}
               </button>
               {isOpen && (
                 <div className="mt-1 space-y-0.5" data-testid={`${tp}nav-group-${g.id}-items`}>
-                  {g.id === "internal" && whOpts.length > 0 && (
+                  {!editMode && g.id === "internal" && whOpts.length > 0 && (
                     <select
                       data-testid={`${tp}internal-warehouse-select`}
                       value={active}
@@ -172,19 +262,44 @@ function SidebarContent({ user, onNavigate, tp = "" }: { user?: User; onNavigate
                       {whOpts.map((o) => (<option key={o.value} value={o.value} className="text-black">{o.label}</option>))}
                     </select>
                   )}
-                  {(g.id !== "internal" || active) && items.map((n) => (
-                    <NavItemLink key={n.to} n={n} tp={tp} onNavigate={onNavigate} nested />
-                  ))}
+                  {editMode && admin
+                    ? allItems.map((n) => <DraggableRow key={n.testId} n={n} tp={tp} list={g.id} drag={drag} setDrag={setDrag} onReorder={onReorder} nested />)
+                    : (g.id !== "internal" || active) && items.map((n) => <NavItemLink key={n.to} n={n} tp={tp} onNavigate={onNavigate} nested />)}
                 </div>
               )}
             </div>
           );
         })}
-        {SINGLES.filter((n) => visible(user, n)).map((n) => (
-          <NavItemLink key={n.to} n={n} tp={tp} onNavigate={onNavigate} />
-        ))}
+        <div className="space-y-0.5" data-testid={`${tp}nav-singles`}>
+          {editMode && admin
+            ? applyOrder(SINGLES, (n) => n.testId, ord?.singles).map((n) => <DraggableRow key={n.testId} n={n} tp={tp} list="singles" drag={drag} setDrag={setDrag} onReorder={onReorder} />)
+            : singlesOrdered.map((n) => <NavItemLink key={n.to} n={n} tp={tp} onNavigate={onNavigate} />)}
+        </div>
       </nav>
-      <div className="border-t border-sidebar-border p-4">
+      <div className="space-y-1 border-t border-sidebar-border p-4">
+        {admin && (
+          <button
+            type="button"
+            onClick={() => setEditMode((v) => !v)}
+            data-testid={tp + "nav-edit-toggle"}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors duration-150",
+              editMode ? "bg-sidebar-primary text-sidebar-primary-foreground" : "text-[#D6C7B2] hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+            )}
+          >
+            {editMode ? <X className="size-4" /> : <Settings2 className="size-4" />} {editMode ? "Selesai Atur Menu" : "Atur Urutan Menu"}
+          </button>
+        )}
+        {editMode && admin && (
+          <button
+            type="button"
+            onClick={resetOrder}
+            data-testid={tp + "nav-reset-order"}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-[#D6C7B2] transition-colors duration-150 hover:bg-sidebar-accent/60"
+          >
+            Kembalikan ke urutan semula
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void endSession()}

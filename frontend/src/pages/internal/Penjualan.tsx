@@ -65,18 +65,41 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
     try {
       const r = await apiGet<{ valid: boolean; error?: string; bruto?: number; keterangan?: string }>(`/internal/penjualan/lookup?${whqs(wh, { seri: s })}`);
       if (!r.valid) {
-        // Sudah terjual -> pop-up khusus & kosongkan kolom nomor seri untuk input ulang.
-        if ((r.error || "").toLowerCase().includes("terjual")) { setDupMsg(`Nomor seri '${s}' sudah terjual`); updateRow(idx, { nomor_seri: "" }); focusCell(idx, "seri"); return; }
+        // Sudah dijual -> pop-up khusus & kosongkan kolom nomor seri untuk input ulang.
+        if ((r.error || "").toLowerCase().includes("terjual") || (r.error || "").toLowerCase().includes("dijual")) { setDupMsg(`Nomor seri '${s}' sudah dijual`); updateRow(idx, { nomor_seri: "" }); focusCell(idx, "seri"); return; }
         toast.error(r.error || "Nomor seri tidak valid"); return;
       }
       const prevJadi = idx > 0 ? rows[idx - 1].nomor_jadi : "";
-      const autoJadi = row.nomor_jadi || (prevJadi ? nextSerial(prevJadi) : "");
+      const autoJadi = (row.nomor_jadi || (prevJadi ? nextSerial(prevJadi) : "")).trim().toUpperCase();
+      // Nomor jadi yang terisi otomatis juga harus dicek — jika sudah pernah dijual, kosongkan & minta input ulang.
+      if (autoJadi && await jadiExists(autoJadi)) {
+        updateRow(idx, { bruto: String(r.bruto ?? ""), keterangan: r.keterangan ?? "", nomor_jadi: "" });
+        setDupMsg(`Nomor jadi '${autoJadi}' sudah dijual`); focusCell(idx, "jadi"); return;
+      }
       updateRow(idx, { bruto: String(r.bruto ?? ""), keterangan: r.keterangan ?? "", nomor_jadi: autoJadi });
       if (idx === rows.length - 1 && rows.length < MAX_ROWS) {
         setRows((cur) => [...cur, emptyRow(row.grade)]);
       }
       focusCell(idx + 1, "seri");
     } catch (e) { toast.error(errMsg(e)); }
+  };
+
+  // Cek nomor jadi ke server (penjualan lain / out). Dup dalam form yang sama juga dihitung.
+  const jadiExists = async (j: string, idx?: number): Promise<boolean> => {
+    const up = j.trim().toUpperCase();
+    if (!up) return false;
+    if (rows.some((r, i) => i !== idx && r.nomor_jadi.trim().toUpperCase() === up)) return true;
+    try {
+      const res = await apiGet<{ exists: boolean }>(`/internal/penjualan/jadi-check?${whqs(wh, { jadi: up, exclude_id: editing?.id ?? undefined })}`);
+      return res.exists;
+    } catch { return false; }
+  };
+
+  // Enter di Nomor Jadi: jika sudah dijual -> pop-up & kosongkan untuk input ulang; jika aman -> lanjut ke grade.
+  const onJadiEnter = async (idx: number) => {
+    const j = rows[idx].nomor_jadi.trim().toUpperCase();
+    if (j && await jadiExists(j, idx)) { setDupMsg(`Nomor jadi '${j}' sudah dijual`); updateRow(idx, { nomor_jadi: "" }); focusCell(idx, "jadi"); return; }
+    focusCell(idx, "grade");
   };
 
   // Enter di Grade: LANJUT KE GRADE DI BARIS BAWAHNYA (tidak kembali ke nomor seri).
@@ -118,7 +141,7 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
               <TableRow key={r._k} data-testid={`jual-row-${idx}`}>
                 <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                 <TableCell><Input ref={(el) => { cellRefs.current[`${idx}:seri`] = el; }} data-testid={`jual-seri-${idx}`} className="uppercase placeholder:normal-case" value={r.nomor_seri} onChange={(e) => updateRow(idx, { nomor_seri: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onSeriEnter(idx); } }} placeholder="Nomor seri" /></TableCell>
-                <TableCell><Input data-testid={`jual-jadi-${idx}`} className="w-32 uppercase placeholder:normal-case" value={r.nomor_jadi} onChange={(e) => updateRow(idx, { nomor_jadi: e.target.value })} placeholder="Nomor jadi" /></TableCell>
+                <TableCell><Input ref={(el) => { cellRefs.current[`${idx}:jadi`] = el; }} data-testid={`jual-jadi-${idx}`} className="w-32 uppercase placeholder:normal-case" value={r.nomor_jadi} onChange={(e) => updateRow(idx, { nomor_jadi: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onJadiEnter(idx); } }} placeholder="Nomor jadi" /></TableCell>
                 <TableCell><Input data-testid={`jual-bruto-${idx}`} type="number" max={MAX_BRUTO} className="w-20" value={r.bruto} onChange={(e) => updateRow(idx, { bruto: e.target.value })} /></TableCell>
                 <TableCell className="font-mono text-sm" data-testid={`jual-netto-${idx}`}>{r.bruto ? numId(Number(r.bruto) - 2) : "—"}</TableCell>
                 <TableCell>

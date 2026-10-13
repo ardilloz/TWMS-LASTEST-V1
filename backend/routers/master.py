@@ -18,6 +18,24 @@ async def today():
     return TodayOut(today=today_iso("Asia/Jakarta"))
 
 
+@router.get("/meta/nav-order")
+async def get_nav_order():
+    """Urutan & tampilan menu global yang diatur admin utama; dipakai semua pengguna."""
+    doc = await db.app_settings.find_one({"id": "nav_order"}, {"_id": 0, "value": 1})
+    return doc.get("value") if doc else None
+
+
+@router.put("/meta/nav-order")
+async def set_nav_order(body: dict, admin: dict = Depends(require_admin)):
+    """Hanya admin utama yang boleh menyimpan susunan menu (berlaku untuk semua pengguna)."""
+    await db.app_settings.update_one(
+        {"id": "nav_order"},
+        {"$set": {"id": "nav_order", "value": body, "updated_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
 # ---------- Gudang ----------
 @router.get("/warehouses", response_model=list[Warehouse])
 async def list_warehouses(user: dict = Depends(get_current_user)):
