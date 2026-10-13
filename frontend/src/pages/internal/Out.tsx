@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Boxes, Download, LogOut, Scale, Trash2, TrendingUp, Upload, Wallet } from "lucide-react";
+import { Boxes, Download, LogOut, Scale, Search, Trash2, TrendingUp, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -37,10 +38,17 @@ export default function OutPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [toDelete, setToDelete] = useState<OutRecord | null>(null);
+  const [qSeri, setQSeri] = useState("");
+  const [qBandul, setQBandul] = useState("");
+  const [qJadi, setQJadi] = useState("");
 
   const params = useMemo(() => ({ date_from: effFrom, date_to: effTo }), [effFrom, effTo]);
   const list = useQuery({ queryKey: ["out", wh, params], enabled: !!wh && !!effFrom, queryFn: () => apiGet<OutRecord[]>(`/internal/out?${whqs(wh, params)}`) });
-  const data = list.data ?? [];
+  const data = useMemo(() => (list.data ?? []).filter((r) =>
+    (r.nomor_seri || "").toLowerCase().includes(qSeri.trim().toLowerCase()) &&
+    (r.bandul_nama || "").toLowerCase().includes(qBandul.trim().toLowerCase()) &&
+    (r.nomor_jadi || "").toLowerCase().includes(qJadi.trim().toLowerCase())
+  ), [list.data, qSeri, qBandul, qJadi]);
   const sort = useSort<OutRecord>(data);
   const paged = usePaged(sort.sorted, 100);
 
@@ -81,6 +89,9 @@ export default function OutPage() {
       <Toolbar>
         <div className="space-y-1.5"><Label>Tanggal Dari</Label><DateField testId="out-filter-from" value={effFrom} onChange={setFrom} /></div>
         <div className="space-y-1.5"><Label>Sampai</Label><DateField testId="out-filter-to" value={effTo} onChange={setTo} /></div>
+        <div className="space-y-1.5"><Label>Cari Nomor Seri</Label><div className="relative"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input data-testid="out-search-seri" className="pl-8 uppercase placeholder:normal-case" value={qSeri} onChange={(e) => { setQSeri(e.target.value); paged.setPage(1); }} /></div></div>
+        <div className="space-y-1.5"><Label>Cari Bandul</Label><div className="relative"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input data-testid="out-search-bandul" className="pl-8 uppercase placeholder:normal-case" value={qBandul} onChange={(e) => { setQBandul(e.target.value); paged.setPage(1); }} /></div></div>
+        <div className="space-y-1.5"><Label>Cari Nomor Jadi</Label><div className="relative"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input data-testid="out-search-jadi" className="pl-8 uppercase placeholder:normal-case" value={qJadi} onChange={(e) => { setQJadi(e.target.value); paged.setPage(1); }} /></div></div>
       </Toolbar>
 
       <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" data-testid="out-summary">

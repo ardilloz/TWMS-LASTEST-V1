@@ -67,6 +67,19 @@ function PembelianForm({ wh, editing, onDone }: { wh: string; editing: Pembelian
   const addRowAndFocus = () => { setRows((cur) => { if (cur.length >= MAX_ROWS) { toast.error(`Maksimal ${MAX_ROWS} nomor seri`); return cur; } const next = [...cur, emptyRow()]; focusCell(next.length - 1, "seri"); return next; }); };
   const removeRow = (idx: number) => { setRows((cur) => (cur.length === 1 ? [emptyRow()] : cur.filter((_, i) => i !== idx))); scheduleSave(); };
 
+  // Enter di Nomor Seri: cek apakah sudah pernah diinput (di baris lain / pembelian lain). Jika ganda -> pop-up & kosongkan kolom.
+  const onSeriEnter = async (idx: number) => {
+    const s = rows[idx].nomor_seri.trim().toUpperCase();
+    if (!s) { focusCell(idx, "harga"); return; }
+    const dupInForm = rows.some((r, i) => i !== idx && r.nomor_seri.trim().toUpperCase() === s);
+    if (dupInForm) { setDupMsg(`Nomor seri '${s}' sudah pernah diinput`); updateRow(idx, { nomor_seri: "" }); focusCell(idx, "seri"); return; }
+    try {
+      const res = await apiGet<{ exists: boolean }>(`/internal/pembelian/seri-check?${whqs(wh, { seri: s, exclude_id: pid ?? undefined })}`);
+      if (res.exists) { setDupMsg(`Nomor seri '${s}' sudah pernah diinput`); updateRow(idx, { nomor_seri: "" }); focusCell(idx, "seri"); return; }
+    } catch { /* biarkan validasi final saat Simpan menangani error koneksi */ }
+    focusCell(idx, "harga");
+  };
+
   const finalize = useMutation({
     mutationFn: async () => { const payload = buildPayload(); if (payload.items.length === 0) throw new Error("Isi minimal satu nomor seri"); return pid ? apiPut(`/internal/pembelian/${pid}?${whqs(wh)}`, payload) : apiPost(`/internal/pembelian?${whqs(wh)}`, payload); },
     onSuccess: () => { toast.success(editing ? "Pembelian diperbarui" : "Pembelian tersimpan"); qc.invalidateQueries({ queryKey: ["pembelian", wh] }); qc.invalidateQueries({ queryKey: ["kasir", wh] }); qc.invalidateQueries({ queryKey: ["berat-pending", wh] }); onDone(); },
@@ -102,7 +115,7 @@ function PembelianForm({ wh, editing, onDone }: { wh: string; editing: Pembelian
             {rows.map((r, idx) => (
               <TableRow key={r._k} data-testid={`beli-row-${idx}`}>
                 <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                <TableCell><Input ref={(el) => { cellRefs.current[`${idx}:seri`] = el; }} data-testid={`beli-seri-${idx}`} className="uppercase placeholder:normal-case" value={r.nomor_seri} onChange={(e) => updateRow(idx, { nomor_seri: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusCell(idx, "harga"); } }} placeholder="Nomor seri" /></TableCell>
+                <TableCell><Input ref={(el) => { cellRefs.current[`${idx}:seri`] = el; }} data-testid={`beli-seri-${idx}`} className="uppercase placeholder:normal-case" value={r.nomor_seri} onChange={(e) => updateRow(idx, { nomor_seri: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void onSeriEnter(idx); } }} placeholder="Nomor seri" /></TableCell>
                 <TableCell><div className="flex items-center gap-2"><Input ref={(el) => { cellRefs.current[`${idx}:harga`] = el; }} data-testid={`beli-harga-${idx}`} type="number" inputMode="numeric" className="w-24" value={r.harga_ribu} onChange={(e) => updateRow(idx, { harga_ribu: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusCell(idx, "ket"); } }} placeholder="56" /><span className="font-mono text-xs text-muted-foreground" data-testid={`beli-harga-display-${idx}`}>{r.harga_ribu ? rupiah(Math.round(Number(r.harga_ribu) || 0) * 1000) : "—"}</span></div></TableCell>
                 <TableCell><Input ref={(el) => { cellRefs.current[`${idx}:ket`] = el; }} data-testid={`beli-ket-${idx}`} value={r.keterangan} onChange={(e) => updateRow(idx, { keterangan: e.target.value })} onBlur={scheduleSave} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (idx === rows.length - 1 && r.nomor_seri.trim()) addRowAndFocus(); else focusCell(idx + 1, "seri"); } }} placeholder="Keterangan" /></TableCell>
                 <TableCell><Button type="button" variant="ghost" size="icon-sm" onClick={() => removeRow(idx)} data-testid={`beli-remove-${idx}`} aria-label="Hapus baris"><Trash2 className="size-4 text-red-600" /></Button></TableCell>

@@ -30,7 +30,7 @@ Aturan:
 - Jika pengguna adalah bagian PCA (akses penuh), JANGAN PERNAH menyuruh mereka menghubungi PCA — mereka sendirilah PCA-nya. Jawab langsung dari data; bila data kosong/belum ada, katakan dengan jujur bahwa datanya belum ada.
 - Jika pengguna staff (akses terbatas) bertanya tentang area yang tidak ada di data (misalnya penjualan, harga, pembelian, supplier, riwayat, atau stok bila tidak tercantum), jawab dengan sopan bahwa mereka tidak memiliki akses ke data tersebut dan sarankan menghubungi bagian PCA. JANGAN menjawab, memperkirakan, atau mengarang isi area tersebut. Jangan pernah menyebut kata "admin" — selalu gunakan "bagian PCA".
 - Jika jawabannya ada di data tapi datanya kosong/belum ada, katakan jujur demikian — jangan mengarang angka.
-- Satuan: Glangse dalam lembar, Tali Putih dalam kg, Kertas Coklat dalam roll.
+- Satuan: Glangse dalam koli, Tali Putih dalam kg, Kertas Coklat dalam roll.
 - Format angka dengan pemisah ribuan titik (gaya Indonesia). Mata uang dalam Rupiah (Rp).
 - Jawaban ringkas dan langsung. Gunakan daftar poin bila membantu. Markdown sederhana (bold, list) boleh dipakai.
 - Jika ditanya hal di luar data gudang, jawab singkat bahwa kamu hanya bisa membantu seputar data gudang aplikasi ini.
@@ -86,17 +86,17 @@ async def build_data_context(user: dict) -> str:
     if can_stock:
         stock = await compute_stock()
         tot = {"glangse": 0.0, "tali": 0.0, "kertas": 0.0}
-        lines.append("\nSTOK PER GUDANG (Glangse=lembar, Tali Putih=kg, Kertas Coklat=roll):")
+        lines.append("\nSTOK PER GUDANG (Glangse=koli, Tali Putih=kg, Kertas Coklat=roll):")
         for w in whs:
             s = stock.get(w["id"], {"glangse": 0.0, "tali": 0.0, "kertas": 0.0})
             for k in tot:
                 tot[k] += s[k]
             lines.append(
-                f"- {w['name']}: Glangse {_num(s['glangse'])} lembar, Tali Putih {_num(s['tali'])} kg, "
+                f"- {w['name']}: Glangse {_num(s['glangse'])} koli, Tali Putih {_num(s['tali'])} kg, "
                 f"Kertas Coklat {_num(s['kertas'])} roll"
             )
         lines.append(
-            f"- TOTAL (gudang yang diakses): Glangse {_num(tot['glangse'])} lembar, Tali Putih {_num(tot['tali'])} kg, "
+            f"- TOTAL (gudang yang diakses): Glangse {_num(tot['glangse'])} koli, Tali Putih {_num(tot['tali'])} kg, "
             f"Kertas Coklat {_num(tot['kertas'])} roll"
         )
         sections += 1

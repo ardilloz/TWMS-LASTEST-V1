@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Download, Pencil, Plus, Save, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -27,18 +27,32 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
   const qc = useQueryClient();
   const today = useToday();
   const grades = useQuery({ queryKey: ["harga-jual", wh], queryFn: () => apiGet<HargaJual[]>(`/internal/harga-jual?${whqs(wh)}`) });
-  const [date, setDate] = useState(editing?.tanggal_jual ?? "");
-  const [gulungan, setGulungan] = useState(editing?.gulungan ?? "");
-  const [pembeli, setPembeli] = useState(editing?.pembeli ?? "");
+  // Draft autosave (localStorage) — hanya untuk entri baru, agar input tidak hilang saat refresh/back.
+  const DRAFT_KEY = `twms-jual-draft-${wh}`;
+  const draft = useMemo(() => {
+    if (editing) return null;
+    try { const raw = localStorage.getItem(DRAFT_KEY); return raw ? (JSON.parse(raw) as { date: string; gulungan: string; pembeli: string; rows: Row[] }) : null; } catch { return null; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ } };
+  const [date, setDate] = useState(editing?.tanggal_jual ?? draft?.date ?? "");
+  const [gulungan, setGulungan] = useState(editing?.gulungan ?? draft?.gulungan ?? "");
+  const [pembeli, setPembeli] = useState(editing?.pembeli ?? draft?.pembeli ?? "");
   const [rows, setRows] = useState<Row[]>(
     editing && editing.items.length
       ? editing.items.map((i): Row => ({ _k: crypto.randomUUID(), nomor_seri: i.nomor_seri, nomor_jadi: i.nomor_jadi, bruto: String(i.bruto), grade: i.grade, keterangan: i.keterangan }))
-      : [emptyRow()],
+      : (draft?.rows?.length ? draft.rows : [emptyRow()]),
   );
   const cellRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [dupMsg, setDupMsg] = useState<string | null>(null);
   const effDate = date || today.data?.today || "";
   const priceOf = (g: string): number | null => (grades.data ?? []).find((x) => x.grade.toUpperCase() === g.trim().toUpperCase())?.harga ?? null;
+
+  useEffect(() => {
+    if (editing) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ date, gulungan, pembeli, rows })); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, gulungan, pembeli, rows]);
 
   const focusCell = (idx: number, field: string) => setTimeout(() => cellRefs.current[`${idx}:${field}`]?.focus(), 30);
   const updateRow = (idx: number, patch: Partial<Row>) => setRows((cur) => cur.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -50,7 +64,11 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
     if (!s) return;
     try {
       const r = await apiGet<{ valid: boolean; error?: string; bruto?: number; keterangan?: string }>(`/internal/penjualan/lookup?${whqs(wh, { seri: s })}`);
-      if (!r.valid) { toast.error(r.error || "Nomor seri tidak valid"); return; }
+      if (!r.valid) {
+        // Sudah terjual -> pop-up khusus & kosongkan kolom nomor seri untuk input ulang.
+        if ((r.error || "").toLowerCase().includes("terjual")) { setDupMsg(`Nomor seri '${s}' sudah terjual`); updateRow(idx, { nomor_seri: "" }); focusCell(idx, "seri"); return; }
+        toast.error(r.error || "Nomor seri tidak valid"); return;
+      }
       const prevJadi = idx > 0 ? rows[idx - 1].nomor_jadi : "";
       const autoJadi = row.nomor_jadi || (prevJadi ? nextSerial(prevJadi) : "");
       updateRow(idx, { bruto: String(r.bruto ?? ""), keterangan: r.keterangan ?? "", nomor_jadi: autoJadi });
@@ -75,7 +93,7 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
       const body = { tanggal_jual: effDate, gulungan, pembeli, items };
       return editing ? apiPut<Penjualan>(`/internal/penjualan/${editing.id}?${whqs(wh)}`, body) : apiPost<Penjualan>(`/internal/penjualan?${whqs(wh)}`, body);
     },
-    onSuccess: () => { toast.success(editing ? "Penjualan diperbarui" : "Penjualan tersimpan"); qc.invalidateQueries({ queryKey: ["penjualan", wh] }); qc.invalidateQueries({ queryKey: ["laporan-penjualan", wh] }); onDone(); },
+    onSuccess: () => { clearDraft(); toast.success(editing ? "Penjualan diperbarui" : "Penjualan tersimpan"); qc.invalidateQueries({ queryKey: ["penjualan", wh] }); qc.invalidateQueries({ queryKey: ["laporan-penjualan", wh] }); onDone(); },
     onError: (e) => { if (e instanceof ApiError && e.status === 409) setDupMsg(errMsg(e)); else toast.error(e instanceof Error && e.message.includes("satu") ? e.message : errMsg(e)); },
   });
 
@@ -117,7 +135,7 @@ function PenjualanForm({ wh, editing, onDone }: { wh: string; editing: Penjualan
         </Table>
         <div className="border-t p-3"><Button type="button" variant="outline" size="sm" onClick={() => setRows((c) => (c.length < MAX_ROWS ? [...c, emptyRow(c[c.length - 1]?.grade ?? "")] : c))} data-testid="jual-add-row"><Plus className="size-4" /> Tambah Baris</Button></div>
       </div>
-      <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={onDone} data-testid="jual-cancel-button"><ArrowLeft className="size-4" /> Kembali</Button><Button type="button" size="lg" onClick={() => save.mutate()} disabled={save.isPending} data-testid="jual-save-button"><Save className="size-4" /> {save.isPending ? "Menyimpan..." : "Simpan"}</Button></div>
+      <div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => { clearDraft(); onDone(); }} data-testid="jual-cancel-button"><ArrowLeft className="size-4" /> Kembali</Button><Button type="button" size="lg" onClick={() => save.mutate()} disabled={save.isPending} data-testid="jual-save-button"><Save className="size-4" /> {save.isPending ? "Menyimpan..." : "Simpan"}</Button></div>
       <DuplicateDialog message={dupMsg} onClose={() => setDupMsg(null)} />
     </div>
   );

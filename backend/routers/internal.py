@@ -337,6 +337,21 @@ async def delete_pembelian(pid: str, wh: str = Depends(active_wh)):
     return {"ok": True}
 
 
+@router.get("/pembelian/seri-check", dependencies=[Depends(require_any("pembelian"))])
+async def pembelian_seri_check(seri: str, exclude_id: Optional[str] = None, wh: str = Depends(active_wh)):
+    """Cek apakah nomor seri sudah pernah diinput di pembelian lain pada gudang ini."""
+    s = (seri or "").strip().upper()
+    if not s:
+        return {"exists": False}
+    q: dict = {"warehouse_id": wh, "items.nomor_seri": s}
+    if exclude_id:
+        q["id"] = {"$ne": exclude_id}
+    found = await db.pembelian.find_one(q, {"_id": 0, "id": 1})
+    return {"exists": found is not None}
+
+
+
+
 @router.get("/pembelian/template", dependencies=[Depends(require_any("pembelian"))])
 async def pembelian_template(wh: str = Depends(active_wh)):
     headers = ["tanggal_beli", "nomor_kupon", "nama_bandul", "potongan_kuli", "potongan_out", "jumlah_out", "nomor_seri", "harga", "bruto", "netto", "keterangan"]

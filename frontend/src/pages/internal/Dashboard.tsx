@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DateField } from "@/components/DateField";
 import { PageHeader } from "@/components/PageHeader";
+import { Paginator } from "@/components/internal/Paginator";
 import { apiGet } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { useToday } from "@/lib/queries";
-import { numId, rupiah, whqs } from "@/lib/internal";
+import { numId, rupiah, usePaged, whqs } from "@/lib/internal";
 import type { DashboardOut } from "@/lib/internal";
 import { useWh } from "./InternalLayout";
 
@@ -33,7 +34,11 @@ export default function Dashboard() {
   const q = useQuery({ queryKey: ["dashboard", wh, effFrom, effTo], enabled: !!wh && !!effFrom, queryFn: () => apiGet<DashboardOut>(`/internal/dashboard?${whqs(wh, { date_from: effFrom, date_to: effTo })}`) });
   const d = q.data;
   const t = d?.totals;
-  const days = useMemo(() => (d?.days ?? []).filter((x) => fmtDate(x.tanggal).toLowerCase().includes(fTanggal.trim().toLowerCase()) || x.tanggal.includes(fTanggal.trim())), [d, fTanggal]);
+  // Ringkasan Per Hari menampilkan riwayat tanggal-tanggal sebelumnya (seluruh histori s/d hari ini), terpisah dari filter kartu statistik.
+  const histTo = today.data?.today || "";
+  const histQ = useQuery({ queryKey: ["dashboard-history", wh, histTo], enabled: !!wh && !!histTo, queryFn: () => apiGet<DashboardOut>(`/internal/dashboard?${whqs(wh, { date_from: "2000-01-01", date_to: histTo })}`) });
+  const days = useMemo(() => (histQ.data?.days ?? []).filter((x) => fmtDate(x.tanggal).toLowerCase().includes(fTanggal.trim().toLowerCase()) || x.tanggal.includes(fTanggal.trim())), [histQ.data, fTanggal]);
+  const paged = usePaged(days, 5);
 
   return (
     <div>
@@ -73,7 +78,7 @@ export default function Dashboard() {
               <TableRow><TableHead className="pb-2"><Input value={fTanggal} onChange={(e) => setFTanggal(e.target.value)} placeholder="filter tgl" className="h-7 text-xs" data-testid="dashboard-day-filter" /></TableHead><TableHead colSpan={5}></TableHead></TableRow>
             </TableHeader>
             <TableBody>
-              {days.map((x) => (
+              {paged.slice.map((x) => (
                 <TableRow key={x.tanggal} data-testid={`dashboard-day-${x.tanggal}`}>
                   <TableCell>{fmtDate(x.tanggal)}</TableCell>
                   <TableCell className="text-right font-mono">{x.jumlah_koli}</TableCell>
@@ -83,9 +88,10 @@ export default function Dashboard() {
                   <TableCell className="text-right font-mono font-semibold">{rupiah(x.total_pembayaran)}</TableCell>
                 </TableRow>
               ))}
-              {days.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{q.isLoading ? "Memuat..." : "Belum ada data."}</TableCell></TableRow>}
+              {days.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{histQ.isLoading ? "Memuat..." : "Belum ada data."}</TableCell></TableRow>}
             </TableBody>
           </Table>
+          <Paginator page={paged.page} total={paged.total} count={paged.count} onPage={paged.setPage} testId="dashboard-days" />
         </section>
       </div>
     </div>
