@@ -35,6 +35,7 @@ export interface User {
   permissions: Permission[];
   warehouse_ids: string[];
   created_at: string;
+  theme?: { mode: "light" | "dark"; accent: string } | null;
 }
 
 export interface LoginIn {

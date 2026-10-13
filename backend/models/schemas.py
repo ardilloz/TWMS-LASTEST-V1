@@ -16,6 +16,11 @@ DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 
 
 # ---------- Auth / users ----------
+class ThemePref(BaseModel):
+    mode: Literal["light", "dark"] = "light"
+    accent: str = Field(default="tobacco", max_length=40)
+
+
 class UserPublic(BaseModel):
     id: str
     username: str
@@ -24,6 +29,7 @@ class UserPublic(BaseModel):
     permissions: list[Permission] = []
     warehouse_ids: list[str] = []  # empty = akses semua gudang; admin selalu semua
     created_at: str
+    theme: Optional[ThemePref] = None
 
 
 class LoginIn(BaseModel):

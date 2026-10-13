@@ -1,23 +1,26 @@
 import { useEffect, useState } from "react";
 import { Check, Moon, Palette, Sun } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ACCENTS, applyTheme, loadTheme, saveTheme, type ThemePref } from "@/lib/theme";
+import { ACCENTS, applyTheme, DEFAULT_THEME, loadTheme, pushTheme, saveTheme, type ThemePref } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-export function ThemeSettings({ userId }: { userId?: string }) {
+export function ThemeSettings({ userId, accountTheme }: { userId?: string; accountTheme?: ThemePref | null }) {
   const [pref, setPref] = useState<ThemePref>(() => loadTheme(userId));
 
+  // Account preference is the source of truth; fall back to this device's last choice, then default.
   useEffect(() => {
-    const p = loadTheme(userId);
-    setPref(p);
-    applyTheme(p);
-  }, [userId]);
+    const resolved = accountTheme ?? loadTheme(userId) ?? DEFAULT_THEME;
+    setPref(resolved);
+    saveTheme(resolved, userId);
+    applyTheme(resolved);
+  }, [userId, accountTheme?.mode, accountTheme?.accent]);
 
   const update = (patch: Partial<ThemePref>) => {
     const next = { ...pref, ...patch };
     setPref(next);
     applyTheme(next);
     saveTheme(next, userId);
+    void pushTheme(next);
   };
 
   return (

@@ -136,15 +136,49 @@
 }
 
 /* Dark-mode compatibility: map common hardcoded light utilities onto theme tokens
-   so pages that use bg-white / amber text remain readable when dark mode is on. */
+   so pages that use bg-white / amber / emerald colors stay cohesive in dark mode. */
 .dark .bg-white { background-color: var(--card); }
+
 .dark .text-amber-950,
 .dark .text-amber-900,
-.dark .text-amber-800 { color: var(--foreground); }
+.dark .text-amber-800,
+.dark .text-amber-700,
+.dark .text-orange-700,
+.dark .text-stone-900,
+.dark .text-stone-800 { color: var(--foreground); }
+
+.dark .text-emerald-900,
+.dark .text-emerald-800,
+.dark .text-emerald-700 { color: #6EE7B7; }
+
 .dark .bg-amber-50,
+.dark .bg-amber-50\/70,
 .dark .bg-amber-50\/60,
-.dark .bg-amber-50\/40 { background-color: var(--muted); }
-.dark .bg-amber-800\/10 { background-color: color-mix(in srgb, var(--primary) 18%, transparent); }
+.dark .bg-amber-50\/40,
+.dark .bg-amber-100 { background-color: var(--muted); }
+.dark .bg-amber-800\/10 { background-color: color-mix(in srgb, var(--primary) 20%, transparent); }
+
+.dark .bg-emerald-50,
+.dark .bg-emerald-100 { background-color: color-mix(in srgb, #10B981 16%, transparent); }
+.dark .bg-sky-50,
+.dark .bg-sky-100 { background-color: color-mix(in srgb, #38BDF8 16%, transparent); }
+.dark .bg-indigo-50 { background-color: color-mix(in srgb, #818CF8 16%, transparent); }
+.dark .bg-red-50 { background-color: color-mix(in srgb, #F87171 16%, transparent); }
+
+.dark .text-indigo-900 { color: #A5B4FC; }
+.dark .text-sky-900,
+.dark .text-sky-800 { color: #7DD3FC; }
+
+.dark .border-amber-200,
+.dark .border-amber-300,
+.dark .border-amber-400,
+.dark .border-amber-500,
+.dark .border-amber-700,
+.dark .border-amber-800\/20,
+.dark .border-emerald-200,
+.dark .border-emerald-300,
+.dark .border-indigo-200,
+.dark .border-red-200 { border-color: var(--border); }
 
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(10px); }

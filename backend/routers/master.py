@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from lib.auth import allowed_warehouses, get_current_user, now_iso, require_admin, require_any
 from lib.db import db
 from lib.dates import today_iso
-from models.schemas import Supplier, SupplierIn, TodayOut, Warehouse, WarehouseIn
+from models.schemas import Supplier, SupplierIn, ThemePref, TodayOut, Warehouse, WarehouseIn
 
 router = APIRouter(tags=["master"], dependencies=[Depends(get_current_user)])
 
@@ -33,6 +33,13 @@ async def set_nav_order(body: dict, admin: dict = Depends(require_admin)):
         {"$set": {"id": "nav_order", "value": body, "updated_at": now_iso()}},
         upsert=True,
     )
+    return {"ok": True}
+
+
+@router.put("/meta/theme")
+async def set_theme(body: ThemePref, user: dict = Depends(get_current_user)):
+    """Simpan preferensi tampilan (mode & warna) ke akun pengguna agar ikut di perangkat lain."""
+    await db.users.update_one({"id": user["id"]}, {"$set": {"theme": body.model_dump()}})
     return {"ok": True}
 
 

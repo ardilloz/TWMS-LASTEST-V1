@@ -218,7 +218,7 @@ function SidebarContent({ user, onNavigate, tp = "" }: { user?: User; onNavigate
               {user?.role === "admin" ? "Admin Utama" : user ? "Staff" : ""}
             </p>
           </div>
-          <ThemeSettings userId={user?.id} />
+          <ThemeSettings userId={user?.id} accountTheme={user?.theme ?? null} />
         </div>
       </div>
       <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-5">
