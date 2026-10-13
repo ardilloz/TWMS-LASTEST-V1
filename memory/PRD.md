@@ -26,5 +26,12 @@ Workspace baru: import project dari GitHub repository https://github.com/ardillo
 - Tidak ditemukan kode yang memaksa reload (hanya logout yang redirect). Refresh acak di preview berasal dari Vite HMR/overlay (artefak lingkungan preview), bukan bug aplikasi. Mitigasi kehilangan data: autosave draft Penjualan (revisi #6).
 
 ## Backlog
-- P1: Uji fitur Asisten AI (butuh balance Universal Key), upload foto KTP (object storage)
-- P2: (opsional) endpoint server-side "N hari terakhir" untuk histori Dashboard bila data pembelian sangat besar
+- 2026-10-13: 6 revisi lanjutan (semua lolos testing 100% — iteration_4.json):
+  1. Penjualan: Enter nomor seri sudah dijual -> pop-up "sudah dijual" + kolom dikosongkan
+  2. Penjualan: nomor jadi (manual/otomatis) sudah dipakai -> pop-up "nomor jadi sudah dijual" + dikosongkan (endpoint /internal/penjualan/jadi-check)
+  3. Menu "Asisten AI" -> "Tanya Dave"; AI bernama Dave (assistant.py SYSTEM_PROMPT)
+  4. Pembelian: Enter nama bandul tak terdaftar -> pop-up "nama bandul belum terdaftar"
+  5. Pengaturan tampilan per-pengguna (tombol palet di samping nama): mode Terang/Gelap + 6 warna aksen, tersimpan di localStorage (lib/theme.ts, ThemeSettings.tsx)
+  6. Admin utama drag-reorder menu ("Atur Urutan Menu"), urutan global berlaku semua pengguna (endpoint /meta/nav-order, lib/navOrder.ts)
+
+- P1: Uji fitur Asisten AI (Dave) end-to-end (butuh balance Universal Key), upload foto KTP
