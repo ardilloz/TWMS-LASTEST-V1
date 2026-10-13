@@ -1,0 +1,29 @@
+{
+  "summary": "Verified iter11 revisions: (1) account-persisted theme via PUT /api/meta/theme and (2) full dark-mode cohesion. Backend: 6/6 pytest cases PASS covering auth-required PUT, dark/ocean round-trip through /auth/me, light/emerald update, invalid-mode 422, and cross-session persistence (login A sets theme -> login B reads it from /auth/me). Frontend (Playwright, admin/admin123): opening ThemeSettings panel + choosing Gelap toggles html.dark class and choosing accent 'ocean' sets --primary=#60A5FA (ocean primaryDark variant); each change fires PUT /api/meta/theme (observed 200 twice). CRITICAL CROSS-DEVICE PROOF: in a FRESH browser context (new storage, no localStorage) logging in as admin loads the app already in dark+ocean because AppLayout feeds user.theme into ThemeSettings — observed has_dark=True, --primary=#60A5FA on first render after /auth/me resolves. Dark-mode cohesion scan on /, /internal/dashboard, /internal/pembelian, /internal/penjualan, /internal/harga, /gudang all PASS with 0 bright-white cards; stat cards on stock Dashboard are translucent tinted (glangse/tali/kertas). /asisten and /barang-keluar hit a vite dev-server 'Load failure' overlay during the rapid-navigation sweep (vite /src/main.tsx 429s), unrelated to the dark-mode change — the page shells themselves rendered dark in prior loads. Admin theme reset back to default {mode:'light', accent:'tobacco'} at end of test run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_theme_persist.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PUT /api/meta/theme uses $set on users doc keyed by user['id'] with Pydantic-validated ThemePref — good. ThemePref has mode Literal + accent max_length=40 so arbitrary accent IDs are accepted (frontend only renders known IDs). Acceptable; backend doesn't need to whitelist IDs because applyTheme falls back to ACCENTS[0] when unknown.",
+    "UserPublic.theme is Optional[ThemePref]; /auth/me returns the full user document after $set so persistence is observable in a single round trip. Good.",
+    "theme.ts.applyTheme sets --primary as hex (e.g. '#60A5FA'). This still works because the app CSS token uses the var directly, but Tailwind's shadcn tokens elsewhere may be defined as hsl(var(--primary)); worth auditing (same comment as iter10). Not blocking.",
+    "ThemeSettings pushTheme is fire-and-forget; a 500 would silently fail. Consider surfacing an error via toast when PUT fails so the user knows it only applied locally.",
+    "Minor: ThemeSettings useEffect dependency array includes accountTheme?.mode and accountTheme?.accent but not accountTheme itself; if the server starts returning additional fields on ThemePref later, those won't propagate. Low risk."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter11_theme_persist.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% of the 5 revisions verified"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Admin user's theme field was written and then reset to {mode:'light', accent:'tobacco'} at end of run (equivalent to default). No other seed data created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Theme is now persisted on the user document under 'theme' field ({mode, accent}); endpoint PUT /api/meta/theme (any auth user). /auth/me returns theme. Frontend AppLayout passes user.theme to ThemeSettings which calls applyTheme on each account update. In Playwright, after login/you must await /auth/me (page reflects dark class only after accountTheme prop updates, ~1s). Admin currently sits at {light, tobacco} default. For dark-mode visuals: index.css has a dark-mode compatibility block that remaps bg-white/amber/emerald/indigo/sky/red utility backgrounds onto theme tokens, so pages using those utilities get cohesive dark surfaces automatically. During rapid Playwright navigation the vite dev server throws 429s and shows an 'emergent Load failure' overlay — pace page.goto calls with >=2s waits to avoid false negatives.",
+  "rca of the issue": "N/A — both iter11 revisions implemented correctly."
+}

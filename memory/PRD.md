@@ -35,3 +35,7 @@ Workspace baru: import project dari GitHub repository https://github.com/ardillo
   6. Admin utama drag-reorder menu ("Atur Urutan Menu"), urutan global berlaku semua pengguna (endpoint /meta/nav-order, lib/navOrder.ts)
 
 - P1: Uji fitur Asisten AI (Dave) end-to-end (butuh balance Universal Key), upload foto KTP
+
+- 2026-10-13: 2 revisi tampilan (lolos testing 100% — iteration_5.json):
+  1. Simpan Tema ke Akun: preferensi mode & warna disimpan di akun pengguna (PUT /meta/theme, dikembalikan via /auth/me) — tema ikut saat login di perangkat lain (lib/theme.ts pushTheme, ThemeSettings accountTheme)
+  2. Mode Gelap Penuh: blok CSS kompatibilitas dark mode di index.css memetakan util bg-white/amber/emerald/indigo/sky/red ke token tema; aksen punya varian terang & gelap (primaryDark) agar kontras baik. Terverifikasi kohesif di Dashboard, Internal, Pembelian, Penjualan, Harga, Gudang, Tanya Dave
